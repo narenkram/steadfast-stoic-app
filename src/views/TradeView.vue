@@ -3162,39 +3162,72 @@ const connectWebSocket = () => {
   socket.value.onmessage = (event) => {
     const quoteData = JSON.parse(event.data);
     // console.log('WebSocket message received:', quoteData);
-    if (quoteData.lp) {
-      const symbolInfo = exchangeSymbols.value.symbolData[selectedMasterSymbol.value];
-      if (symbolInfo) {
-        const brokerType = selectedBroker.value?.brokerName === 'Dhan' ? 'dhan' : 'other';
-        const { exchangeSecurityId } = symbolInfo[brokerType];
+    if (selectedBroker.value?.brokerName === 'Dhan') {
+      if (quoteData.type === 'Ticker Data' && quoteData.LTP) {
+        const symbolInfo = exchangeSymbols.value.symbolData[selectedMasterSymbol.value];
+        if (symbolInfo && symbolInfo.dhan) {
+          const { exchangeSecurityId } = symbolInfo.dhan;
 
-        if (quoteData.tk === exchangeSecurityId) {
-          // Update the price for the selected master symbol
-          switch (selectedMasterSymbol.value) {
-            case 'NIFTY': niftyPrice.value = quoteData.lp; break;
-            case 'BANKNIFTY': bankNiftyPrice.value = quoteData.lp; break;
-            case 'FINNIFTY': finniftyPrice.value = quoteData.lp; break;
-            case 'NIFTYNXT50': niftynxt50Price.value = quoteData.lp; break;
-            case 'MIDCPNIFTY': midcpniftyPrice.value = quoteData.lp; break;
-            case 'SENSEX': sensexPrice.value = quoteData.lp; break;
-            case 'BANKEX': bankexPrice.value = quoteData.lp; break;
-            case 'SENSEX50': sensex50Price.value = quoteData.lp; break;
+          if (quoteData.security_id === exchangeSecurityId) {
+            // Update the price for the selected master symbol
+            switch (selectedMasterSymbol.value) {
+              case 'NIFTY': niftyPrice.value = parseFloat(quoteData.LTP); break;
+              case 'BANKNIFTY': bankNiftyPrice.value = parseFloat(quoteData.LTP); break;
+              case 'FINNIFTY': finniftyPrice.value = parseFloat(quoteData.LTP); break;
+              case 'NIFTYNXT50': niftynxt50Price.value = parseFloat(quoteData.LTP); break;
+              case 'MIDCPNIFTY': midcpniftyPrice.value = parseFloat(quoteData.LTP); break;
+              case 'SENSEX': sensexPrice.value = parseFloat(quoteData.LTP); break;
+              case 'BANKEX': bankexPrice.value = parseFloat(quoteData.LTP); break;
+              case 'SENSEX50': sensex50Price.value = parseFloat(quoteData.LTP); break;
+            }
+          }
+
+          if (quoteData.security_id === defaultCallSecurityId.value) {
+            latestCallLTP.value = quoteData.LTP;
+          } else if (quoteData.security_id === defaultPutSecurityId.value) {
+            latestPutLTP.value = quoteData.LTP;
+          }
+
+          // Update position LTPs
+          const positionTsym = Object.keys(positionSecurityIds.value).find(tsym => positionSecurityIds.value[tsym] === quoteData.security_id);
+          if (positionTsym) {
+            positionLTPs.value[positionTsym] = parseFloat(quoteData.LTP);
           }
         }
       }
+    } else {
+      // Existing code for Flattrade and Shoonya
+      if (quoteData.lp) {
+        const symbolInfo = exchangeSymbols.value.symbolData[selectedMasterSymbol.value];
+        if (symbolInfo) {
+          const { exchangeSecurityId } = symbolInfo.other;
 
-      if (quoteData.tk === defaultCallSecurityId.value) {
-        latestCallLTP.value = quoteData.lp;
-        // console.log('Updated Call LTP:', latestCallLTP.value);
-      } else if (quoteData.tk === defaultPutSecurityId.value) {
-        latestPutLTP.value = quoteData.lp;
-        // console.log('Updated Put LTP:', latestPutLTP.value);
-      }
+          if (quoteData.tk === exchangeSecurityId) {
+            // Update the price for the selected master symbol
+            switch (selectedMasterSymbol.value) {
+              case 'NIFTY': niftyPrice.value = quoteData.lp; break;
+              case 'BANKNIFTY': bankNiftyPrice.value = quoteData.lp; break;
+              case 'FINNIFTY': finniftyPrice.value = quoteData.lp; break;
+              case 'NIFTYNXT50': niftynxt50Price.value = quoteData.lp; break;
+              case 'MIDCPNIFTY': midcpniftyPrice.value = quoteData.lp; break;
+              case 'SENSEX': sensexPrice.value = quoteData.lp; break;
+              case 'BANKEX': bankexPrice.value = quoteData.lp; break;
+              case 'SENSEX50': sensex50Price.value = quoteData.lp; break;
+            }
+          }
+        }
 
-      // Update position LTPs
-      const positionTsym = Object.keys(positionSecurityIds.value).find(tsym => positionSecurityIds.value[tsym] === quoteData.tk);
-      if (positionTsym) {
-        positionLTPs.value[positionTsym] = quoteData.lp;
+        if (quoteData.tk === defaultCallSecurityId.value) {
+          latestCallLTP.value = quoteData.lp;
+        } else if (quoteData.tk === defaultPutSecurityId.value) {
+          latestPutLTP.value = quoteData.lp;
+        }
+
+        // Update position LTPs
+        const positionTsym = Object.keys(positionSecurityIds.value).find(tsym => positionSecurityIds.value[tsym] === quoteData.tk);
+        if (positionTsym) {
+          positionLTPs.value[positionTsym] = quoteData.lp;
+        }
       }
     }
   };
@@ -3229,7 +3262,9 @@ const subscribeToMasterSymbol = () => {
     if (symbolInfo) {
       const brokerType = selectedBroker.value?.brokerName === 'Dhan' ? 'dhan' : 'other';
       const { exchangeCode, exchangeSecurityId } = symbolInfo[brokerType];
-      const symbolToSubscribe = `${exchangeCode}|${exchangeSecurityId}`;
+      const symbolToSubscribe = selectedBroker.value?.brokerName === 'Dhan'
+        ? `${exchangeCode}|${exchangeSecurityId}`
+        : `${exchangeCode}|${exchangeSecurityId}`;
       if (symbolToSubscribe !== `${currentSubscriptions.value.masterSymbolExchangeCode}|${currentSubscriptions.value.masterSymbolSecurityId}`) {
         const data = {
           action: 'subscribe',
@@ -3252,10 +3287,14 @@ const subscribeToOptions = () => {
 
     // Add subscriptions for Call and Put options
     if (defaultCallSecurityId.value && defaultCallSecurityId.value !== 'N/A' && defaultCallSecurityId.value !== currentSubscriptions.value.callOption) {
-      symbolsToSubscribe.push(`${exchangeSegment}|${defaultCallSecurityId.value}`);
+      symbolsToSubscribe.push(selectedBroker.value?.brokerName === 'Dhan'
+        ? `${exchangeSegment}|${defaultCallSecurityId.value}`
+        : `${exchangeSegment}|${defaultCallSecurityId.value}`);
     }
     if (defaultPutSecurityId.value && defaultPutSecurityId.value !== 'N/A' && defaultPutSecurityId.value !== currentSubscriptions.value.putOption) {
-      symbolsToSubscribe.push(`${exchangeSegment}|${defaultPutSecurityId.value}`);
+      symbolsToSubscribe.push(selectedBroker.value?.brokerName === 'Dhan'
+        ? `${exchangeSegment}|${defaultPutSecurityId.value}`
+        : `${exchangeSegment}|${defaultPutSecurityId.value}`);
     }
 
     if (symbolsToSubscribe.length > 0) {
